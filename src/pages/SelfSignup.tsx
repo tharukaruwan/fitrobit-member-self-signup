@@ -320,8 +320,8 @@ export default function SelfSignup() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background flex flex-col">
       {/* Header — gym on the left, current step + progress on the right */}
-      <div className="sticky top-0 z-20 bg-background/95 shadow-sm">
-        <div className="bg-primary text-primary-foreground">
+      <div className="sticky top-0 z-20 bg-background/85 shadow-sm backdrop-blur-md">
+        <div className="bg-primary/95 text-primary-foreground backdrop-blur-sm">
           <div className="max-w-md mx-auto px-5 py-5 flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
               {config.gymLogo ? (
@@ -342,9 +342,9 @@ export default function SelfSignup() {
             </div>
           </div>
         </div>
-        <div className="border-b border-border/70 bg-background/95">
+        <div className="border-b border-border/60 bg-background/85 backdrop-blur-md">
           <div className="max-w-md w-full mx-auto px-5 py-3">
-            <div className="h-1 overflow-hidden rounded-full bg-muted">
+            <div className="h-1 overflow-hidden rounded-full bg-muted/80">
               <div
                 className="h-full rounded-full bg-foreground/35 transition-[width] duration-300 ease-out"
                 style={{ width: `${progressPercent}%` }}
