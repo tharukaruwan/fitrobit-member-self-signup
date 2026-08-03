@@ -4,12 +4,13 @@ import {
   Loader2, ChevronLeft, ChevronRight, Check, ShieldCheck, Camera, Upload,
   User, Users2, Phone, Mail, MapPin, Star, Plus, PartyPopper, IdCard, KeyRound, X,
   Search, Facebook, Instagram, Linkedin, Youtube, UserPlus, Building2, Medal,
-  CalendarDays, Smartphone, MoreHorizontal,
+  CalendarDays, Smartphone, MoreHorizontal, Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import Request from "@/lib/api/client";
 import { SignaturePad } from "@/components/SignaturePad";
+import { CameraCapture } from "@/components/CameraCapture";
 
 /* ------------------------------- Types ------------------------------- */
 interface Membership { _id: string; name: string; description?: string; meta?: string; duration?: string; price?: string; memberLimit?: number; benefits?: string[]; }
@@ -23,7 +24,7 @@ interface Question { id: string; label: string; type: string; required?: boolean
 interface EmergencyCfg {
   enabled: boolean; requireRelation?: boolean; requirePhone?: boolean; requireEmail?: boolean;
   showEmail?: boolean; requireAddress?: boolean; showAddress?: boolean; allowMultiple?: boolean;
-  minContacts?: number; maxContacts?: number; relationshipOptions?: string[];
+  minContacts?: number; maxContacts?: number;
 }
 interface Config {
   gymName: string; gymLogo?: string; gymCover?: string;
@@ -35,10 +36,29 @@ interface Config {
   askHowHeardAboutUs?: boolean; howHeardRequired?: boolean;
   agreement: { enabled: boolean; conditions: string[] };
   signature: { enabled: boolean; label: string };
-  welcome?: { title?: string; message?: string } | null;
+  welcome?: {
+    title?: string; message?: string;
+    showAppLinks?: boolean; showMemberName?: boolean; showMemberId?: boolean;
+    showMemberPhone?: boolean; showPassword?: boolean; showAgreementDownload?: boolean;
+  } | null;
 }
 
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
+// Fitness goal options — mirror the admin app's FITNESS_GOALS (member `goal`
+// column). The stored value is the id (e.g. "fat_loss"); the label is shown.
+const FITNESS_GOAL_OPTIONS = [
+  { value: "fat_loss", label: "Fat Loss" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "muscle_gain", label: "Muscle Gain" },
+];
+// Fitrobit member app store links, shown on the welcome screen when enabled.
+const APP_STORE_URL = "https://apps.apple.com/us/app/fitrobit/id6792275385";
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.fitrobit.member";
+// Fixed relationship options for the emergency contact dropdown — identical to
+// the admin member Emergency tab. Not gym-customizable.
+const EMERGENCY_RELATIONSHIP_OPTIONS = [
+  "Spouse", "Parent", "Child", "Sibling", "Friend", "Doctor", "Other", "father", "mother",
+];
 // When the portal collects a password it becomes the member's login password, so
 // it's always required and must meet this minimum length.
 const PASSWORD_MIN_LENGTH = 6;
@@ -193,8 +213,12 @@ export default function SelfSignup() {
       return memberFields.slice(0, memberLimit).every((fv) =>
         config.fields.every((f) => {
           const val = (fv[f.id] ?? "").trim();
-          // A collected password is always required and must meet the minimum.
-          if (f.id === "password") return val.length >= PASSWORD_MIN_LENGTH;
+          // Password follows its own required flag: if left blank the backend
+          // auto-generates one; if the member types one it must meet the minimum.
+          if (f.id === "password") {
+            if (val.length === 0) return !f.required;
+            return val.length >= PASSWORD_MIN_LENGTH;
+          }
           return !f.required || val.length > 0;
         }),
       );
@@ -289,7 +313,7 @@ export default function SelfSignup() {
     return <Center><p className="text-muted-foreground text-sm">This signup link isn’t available.</p></Center>;
   }
   if (done) {
-    return <WelcomeScreen config={config} members={resultMembers} />;
+    return <WelcomeScreen config={config} members={resultMembers} signatures={memberSignature} agreed={memberAgreed} />;
   }
 
   return (
@@ -623,16 +647,32 @@ function FieldsStep({ config, values, onChange }: {
           const tooShort = val.length > 0 && val.length < PASSWORD_MIN_LENGTH;
           return (
             <div key={f.id} className="space-y-1.5">
-              <label className="text-sm font-semibold flex items-center gap-1">{f.label}<span className="text-destructive">*</span></label>
+              <label className="text-sm font-semibold flex items-center gap-1">
+                {f.label}{f.required && <span className="text-destructive">*</span>}
+              </label>
               <input type="password" value={val} onChange={(e) => onChange(f.id, e.target.value)}
                 autoComplete="new-password"
-                placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+                placeholder={f.required ? `At least ${PASSWORD_MIN_LENGTH} characters` : "Leave blank to auto-generate"}
                 className={cn("w-full h-11 rounded-xl border bg-background px-3 text-sm", tooShort ? "border-destructive" : "border-border")} />
               <p className={cn("text-xs", tooShort ? "text-destructive" : "text-muted-foreground")}>
                 {tooShort
                   ? `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`
-                  : `You'll use this to log in to the member app. At least ${PASSWORD_MIN_LENGTH} characters.`}
+                  : f.required
+                    ? `You'll use this to log in to the member app. At least ${PASSWORD_MIN_LENGTH} characters.`
+                    : `Optional — leave blank and we'll generate a password for you. If you set one, use at least ${PASSWORD_MIN_LENGTH} characters.`}
               </p>
+            </div>
+          );
+        }
+        if (f.id === "fitnessGoal") {
+          return (
+            <div key={f.id} className="space-y-1.5">
+              {label}
+              <select value={val} onChange={(e) => onChange(f.id, e.target.value)}
+                className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm">
+                <option value="">Select</option>
+                {FITNESS_GOAL_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
           );
         }
@@ -674,31 +714,58 @@ function FieldsStep({ config, values, onChange }: {
 function PhotoStep({ config, photo, onPhoto }: {
   config: Config; photo: string; onPhoto: (dataUrl: string) => void;
 }) {
+  const [cameraOpen, setCameraOpen] = useState(false);
   const onFile = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => onPhoto(reader.result as string);
     reader.readAsDataURL(file);
   };
+  // "Upload" opens the file picker; "Camera" opens a real in-page camera
+  // (getUserMedia) — a file input's `capture` attribute is ignored on desktop
+  // and just falls back to the file picker, so it can't be relied on.
+  const allowUpload = config.memberPhoto.allowUpload !== false;
+  const allowCamera = config.memberPhoto.allowCamera !== false;
+  // If the gym enabled the photo step but ticked neither source, still allow
+  // upload so members can complete it.
+  const showUpload = allowUpload || !allowCamera;
+  const showCamera = allowCamera;
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <p className="text-sm font-semibold">Profile photo{config.memberPhoto.required && <span className="text-destructive"> *</span>}</p>
-      <label className="block cursor-pointer">
-        {photo ? (
-          <div className="relative">
-            <img src={photo} alt="" className="w-full h-48 object-cover rounded-2xl border border-border" />
-            <span className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-lg">Change</span>
-          </div>
-        ) : (
-          <div className="h-40 rounded-2xl border-2 border-dashed border-border bg-muted/30 flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
-            <Camera className="w-7 h-7" />
-            <span className="text-sm">Tap to add a photo</span>
-            <span className="text-xs">{[config.memberPhoto.allowUpload && "Upload", config.memberPhoto.allowCamera && "Camera"].filter(Boolean).join(" · ")}</span>
-          </div>
+      {photo ? (
+        <img src={photo} alt="" className="w-full h-48 object-cover rounded-2xl border border-border" />
+      ) : (
+        <div className="h-40 rounded-2xl border-2 border-dashed border-border bg-muted/30 flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
+          <Camera className="w-7 h-7" />
+          <span className="text-sm">Add a profile photo</span>
+        </div>
+      )}
+      <div className="flex gap-2">
+        {showUpload && (
+          <label className="flex-1 cursor-pointer">
+            <div className="flex items-center justify-center gap-2 h-11 rounded-xl border border-border bg-card text-sm font-medium hover:bg-muted/50 transition-colors">
+              <Upload className="w-4 h-4" /> {photo ? "Change" : "Upload"}
+            </div>
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+          </label>
         )}
-        <input type="file" accept="image/*" capture={config.memberPhoto.allowCamera ? "user" : undefined}
-          className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-      </label>
+        {showCamera && (
+          <button
+            type="button"
+            onClick={() => setCameraOpen(true)}
+            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl border border-border bg-card text-sm font-medium hover:bg-muted/50 transition-colors"
+          >
+            <Camera className="w-4 h-4" /> Camera
+          </button>
+        )}
+      </div>
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={(img) => { onPhoto(img); setCameraOpen(false); }}
+          onClose={() => setCameraOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -736,7 +803,7 @@ function EmergencyStep({ config, contacts, setContacts }: {
               {r.select ? (
                 <select value={c[r.k] ?? ""} onChange={(ev) => set(ci, r.k, ev.target.value)} className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm">
                   <option value="">Select</option>
-                  {(e.relationshipOptions ?? ["Parent", "Spouse", "Sibling", "Friend"]).map((o) => <option key={o} value={o}>{o}</option>)}
+                  {EMERGENCY_RELATIONSHIP_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               ) : (
                 <input value={c[r.k] ?? ""} onChange={(ev) => set(ci, r.k, ev.target.value)} className="w-full h-11 rounded-xl border border-border bg-background px-3 text-sm" />
@@ -861,8 +928,49 @@ function AgreementStep({ config, agreed, setAgreed, signature, setSignature }: {
 }
 
 /* ----------------------------- Welcome screen ----------------------------- */
-function WelcomeScreen({ config, members }: { config: Config; members: { memberId?: string; name?: string; phoneNumber?: string; password?: string }[] }) {
+function WelcomeScreen({ config, members, signatures, agreed }: {
+  config: Config;
+  members: { memberId?: string; name?: string; phoneNumber?: string; password?: string }[];
+  signatures: string[];
+  agreed: boolean[];
+}) {
   const w = config.welcome || {};
+  // Missing flags default to shown — matches the builder's defaults and keeps
+  // older saved configs (without these keys) behaving sensibly.
+  const showName = w.showMemberName !== false;
+  const showId = w.showMemberId !== false;
+  const showPhone = w.showMemberPhone !== false;
+  const showPassword = w.showPassword !== false;
+  const showAppLinks = w.showAppLinks !== false;
+  const showAgreementDownload =
+    w.showAgreementDownload !== false && config.agreement?.enabled;
+
+  // Build a printable agreement (conditions + signature) and download it.
+  const downloadAgreement = (i: number) => {
+    const m = members[i] || {};
+    const conditions = config.agreement?.conditions ?? [];
+    const sig = signatures[i] || "";
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Agreement — ${config.gymName}</title>
+      <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:40px auto;padding:0 24px;color:#111}
+      h1{font-size:20px}h2{font-size:14px;margin-top:28px}ol{padding-left:18px}li{margin:6px 0;line-height:1.5}
+      .meta{color:#555;font-size:13px}.sig{margin-top:28px}.sig img{border:1px solid #ddd;border-radius:8px;max-width:280px}</style></head>
+      <body><h1>${config.gymName} — Membership Agreement</h1>
+      <p class="meta">Member: ${m.name || ""}${m.memberId ? ` · ${m.memberId}` : ""}<br/>Date: ${new Date().toLocaleDateString()}</p>
+      <h2>Terms &amp; Conditions</h2>
+      ${conditions.length ? `<ol>${conditions.map((c) => `<li>${c}</li>`).join("")}</ol>` : "<p>I agree to the terms and conditions.</p>"}
+      ${sig ? `<div class="sig"><h2>Signature</h2><img src="${sig}" alt="signature"/></div>` : ""}
+      </body></html>`;
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `agreement-${m.memberId || i + 1}.html`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/10 via-background to-background flex items-center justify-center px-6 py-10">
       <div className="max-w-md w-full space-y-5">
@@ -883,12 +991,23 @@ function WelcomeScreen({ config, members }: { config: Config; members: { memberI
               <div key={i} className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="flex items-center gap-2 px-3.5 py-2 bg-primary/5 border-b border-border/60">
                   <span className="w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">{i + 1}</span>
-                  <p className="text-sm font-bold">{m.name || `Member ${i + 1}`}</p>
+                  <p className="text-sm font-bold">{showName ? (m.name || `Member ${i + 1}`) : `Member ${i + 1}`}</p>
                 </div>
                 <div className="p-3.5 space-y-2">
-                  <KV icon={<IdCard className="w-4 h-4" />} k="Member ID" v={m.memberId || "—"} />
-                  {m.phoneNumber && <KV icon={<Phone className="w-4 h-4" />} k="Phone" v={m.phoneNumber} />}
-                  {m.password && <KV icon={<KeyRound className="w-4 h-4" />} k="Password" v={m.password} mono />}
+                  {showName && <KV icon={<User className="w-4 h-4" />} k="Name" v={m.name || "—"} />}
+                  {showId && <KV icon={<IdCard className="w-4 h-4" />} k="Member ID" v={m.memberId || "—"} />}
+                  {showPhone && m.phoneNumber && <KV icon={<Phone className="w-4 h-4" />} k="Phone" v={m.phoneNumber} />}
+                  {showPassword && m.password && <KV icon={<KeyRound className="w-4 h-4" />} k="Password" v={m.password} mono />}
+                  {showAgreementDownload && agreed[i] && (
+                    <button
+                      type="button"
+                      onClick={() => downloadAgreement(i)}
+                      className="w-full flex items-center justify-between gap-2 mt-1 px-3 py-2 rounded-xl border border-border bg-background text-xs font-semibold hover:bg-muted/50 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5"><Download className="w-3.5 h-3.5 text-primary" /> Download agreement</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -898,6 +1017,30 @@ function WelcomeScreen({ config, members }: { config: Config; members: { memberI
           <div className="rounded-2xl border border-border bg-card p-4 text-left space-y-2">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><IdCard className="w-4 h-4" /> Your membership details were sent to the gym.</div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><KeyRound className="w-4 h-4" /> You'll receive your login shortly.</div>
+          </div>
+        )}
+
+        {showAppLinks && (
+          <div className="space-y-2">
+            <p className="text-xs uppercase tracking-wide font-semibold text-muted-foreground">Get the app</p>
+            <div className="grid grid-cols-2 gap-2">
+              <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors">
+                <Smartphone className="w-5 h-5 shrink-0" />
+                <div className="min-w-0 text-left">
+                  <p className="text-[9px] text-muted-foreground leading-none">Download on the</p>
+                  <p className="text-xs font-semibold leading-tight truncate">App Store</p>
+                </div>
+              </a>
+              <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-card hover:bg-muted/50 transition-colors">
+                <Smartphone className="w-5 h-5 shrink-0" />
+                <div className="min-w-0 text-left">
+                  <p className="text-[9px] text-muted-foreground leading-none">Get it on</p>
+                  <p className="text-xs font-semibold leading-tight truncate">Google Play</p>
+                </div>
+              </a>
+            </div>
           </div>
         )}
       </div>
