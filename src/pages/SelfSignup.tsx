@@ -135,7 +135,7 @@ export default function SelfSignup() {
   const [notFound, setNotFound] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
-  const [resultMembers, setResultMembers] = useState<{ memberId?: string; name?: string; phoneNumber?: string; password?: string }[]>([]);
+  const [resultMembers, setResultMembers] = useState<{ _id?: string; memberId?: string; name?: string; phoneNumber?: string; password?: string }[]>([]);
 
   // Selection
   const [pick, setPick] = useState<{ kind: "membership" | "class" | "pt"; parentId: string; id: string } | null>(null);
@@ -313,7 +313,7 @@ export default function SelfSignup() {
     return <Center><p className="text-muted-foreground text-sm">This signup link isn’t available.</p></Center>;
   }
   if (done) {
-    return <WelcomeScreen config={config} members={resultMembers} signatures={memberSignature} agreed={memberAgreed} />;
+    return <WelcomeScreen config={config} members={resultMembers} agreed={memberAgreed} />;
   }
 
   return (
@@ -928,10 +928,9 @@ function AgreementStep({ config, agreed, setAgreed, signature, setSignature }: {
 }
 
 /* ----------------------------- Welcome screen ----------------------------- */
-function WelcomeScreen({ config, members, signatures, agreed }: {
+function WelcomeScreen({ config, members, agreed }: {
   config: Config;
-  members: { memberId?: string; name?: string; phoneNumber?: string; password?: string }[];
-  signatures: string[];
+  members: { _id?: string; memberId?: string; name?: string; phoneNumber?: string; password?: string }[];
   agreed: boolean[];
 }) {
   const w = config.welcome || {};
@@ -945,30 +944,30 @@ function WelcomeScreen({ config, members, signatures, agreed }: {
   const showAgreementDownload =
     w.showAgreementDownload !== false && config.agreement?.enabled;
 
-  // Build a printable agreement (conditions + signature) and download it.
-  const downloadAgreement = (i: number) => {
+  // Download the agreement PDF generated on the backend — the exact same document
+  // the gym admin gets from the member detail page (one source of truth).
+  const downloadAgreement = async (i: number) => {
     const m = members[i] || {};
-    const conditions = config.agreement?.conditions ?? [];
-    const sig = signatures[i] || "";
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Agreement — ${config.gymName}</title>
-      <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:640px;margin:40px auto;padding:0 24px;color:#111}
-      h1{font-size:20px}h2{font-size:14px;margin-top:28px}ol{padding-left:18px}li{margin:6px 0;line-height:1.5}
-      .meta{color:#555;font-size:13px}.sig{margin-top:28px}.sig img{border:1px solid #ddd;border-radius:8px;max-width:280px}</style></head>
-      <body><h1>${config.gymName} — Membership Agreement</h1>
-      <p class="meta">Member: ${m.name || ""}${m.memberId ? ` · ${m.memberId}` : ""}<br/>Date: ${new Date().toLocaleDateString()}</p>
-      <h2>Terms &amp; Conditions</h2>
-      ${conditions.length ? `<ol>${conditions.map((c) => `<li>${c}</li>`).join("")}</ol>` : "<p>I agree to the terms and conditions.</p>"}
-      ${sig ? `<div class="sig"><h2>Signature</h2><img src="${sig}" alt="signature"/></div>` : ""}
-      </body></html>`;
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `agreement-${m.memberId || i + 1}.html`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    if (!m._id) {
+      toast.error("Agreement isn't available yet.");
+      return;
+    }
+    try {
+      const base = import.meta.env.VITE_API_GATEWAY as string;
+      const res = await fetch(`${base}/public/members/${m._id}/agreement.pdf`);
+      if (!res.ok) throw new Error("request failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `agreement-${m.memberId || i + 1}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Couldn't download the agreement. Please try again.");
+    }
   };
 
   return (
