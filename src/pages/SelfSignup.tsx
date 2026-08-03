@@ -205,6 +205,7 @@ export default function SelfSignup() {
 
   const step = steps[stepIdx];
   const isLast = stepIdx === steps.length - 1;
+  const progressPercent = steps.length ? ((stepIdx + 1) / steps.length) * 100 : 0;
 
   const canContinue = useMemo(() => {
     if (!config) return false;
@@ -319,34 +320,37 @@ export default function SelfSignup() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-muted/30 to-background flex flex-col">
       {/* Header — gym on the left, current step + progress on the right */}
-      <div className="bg-primary text-primary-foreground">
-        <div className="max-w-md mx-auto px-5 py-5 flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            {config.gymLogo ? (
-              <img src={config.gymLogo} alt={config.gymName} className="w-11 h-11 rounded-xl object-cover ring-1 ring-white/30" />
-            ) : (
-              <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center font-bold">
-                {config.gymName?.[0] ?? "G"}
+      <div className="sticky top-0 z-20 bg-background/95 shadow-sm">
+        <div className="bg-primary text-primary-foreground">
+          <div className="max-w-md mx-auto px-5 py-5 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              {config.gymLogo ? (
+                <img src={config.gymLogo} alt={config.gymName} className="w-11 h-11 rounded-xl object-cover ring-1 ring-white/30" />
+              ) : (
+                <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center font-bold">
+                  {config.gymName?.[0] ?? "G"}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-wide opacity-80">Join us</p>
+                <p className="text-base font-bold truncate">{config.gymName}</p>
               </div>
-            )}
-            <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-wide opacity-80">Join us</p>
-              <p className="text-base font-bold truncate">{config.gymName}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <p className="text-sm font-bold leading-tight">{STEP_TITLES[step]}</p>
+              <p className="text-[11px] opacity-80">Step {stepIdx + 1} of {steps.length}</p>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-sm font-bold leading-tight">{STEP_TITLES[step]}</p>
-            <p className="text-[11px] opacity-80">Step {stepIdx + 1} of {steps.length}</p>
-          </div>
         </div>
-      </div>
-
-      {/* Progress */}
-      <div className="max-w-md w-full mx-auto px-5 pt-4">
-        <div className="flex items-center gap-1.5">
-          {steps.map((s, i) => (
-            <div key={s} className={cn("h-1.5 flex-1 rounded-full transition-colors", i <= stepIdx ? "bg-primary" : "bg-muted")} />
-          ))}
+        <div className="border-b border-border/70 bg-background/95">
+          <div className="max-w-md w-full mx-auto px-5 py-3">
+            <div className="h-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-foreground/35 transition-[width] duration-300 ease-out"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
