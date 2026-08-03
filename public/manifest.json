@@ -1,0 +1,24 @@
+{
+  "name": "Gym Self-Signup Kiosk",
+  "short_name": "GymSignup",
+  "description": "Modern self-signup kiosk for gym member registration",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "theme_color": "#10B981",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/placeholder.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+/* Minimal global styles - most styling is done via Tailwind and design system */
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="tel"],
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent text selection on buttons and UI elements */
+button,
+.no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
