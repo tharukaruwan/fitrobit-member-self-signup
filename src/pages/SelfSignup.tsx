@@ -43,7 +43,13 @@ interface Config {
   } | null;
 }
 
-const GENDER_OPTIONS = ["Male", "Female", "Other"];
+// Value stored must match the admin app's gender enum (lowercase); the label is
+// what the member sees.
+const GENDER_OPTIONS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+];
 // Fitness goal options — mirror the admin app's FITNESS_GOALS (member `goal`
 // column). The stored value is the id (e.g. "fat_loss"); the label is shown.
 const FITNESS_GOAL_OPTIONS = [
@@ -637,10 +643,10 @@ function FieldsStep({ config, values, onChange }: {
               {label}
               <div className="grid grid-cols-3 gap-2">
                 {GENDER_OPTIONS.map((opt) => (
-                  <button key={opt} type="button" onClick={() => onChange(f.id, val === opt ? "" : opt)}
+                  <button key={opt.value} type="button" onClick={() => onChange(f.id, val === opt.value ? "" : opt.value)}
                     className={cn("py-2.5 rounded-xl border text-sm font-medium transition-colors",
-                      val === opt ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/30 hover:bg-muted/50")}>
-                    {opt}
+                      val === opt.value ? "border-primary bg-primary text-primary-foreground" : "border-border bg-muted/30 hover:bg-muted/50")}>
+                    {opt.label}
                   </button>
                 ))}
               </div>
