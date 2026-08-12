@@ -58,7 +58,7 @@ const FITNESS_GOAL_OPTIONS = [
   { value: "muscle_gain", label: "Muscle Gain" },
 ];
 // Fitrobit member app store links, shown on the welcome screen when enabled.
-const APP_STORE_URL = "https://apps.apple.com/us/app/fitrobit/id6792275385";
+const APP_STORE_URL = "https://apps.apple.com/au/app/fitrobit/id6792275385";
 const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.fitrobit.member";
 // Fixed relationship options for the emergency contact dropdown — identical to
 // the admin member Emergency tab. Not gym-customizable.
